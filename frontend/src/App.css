@@ -312,21 +312,23 @@
 
 /* Cancel button */
 .cancel-button {
-  margin-top: 1rem;
-  padding: 0.8rem 1.5rem;
-  background: rgba(244, 67, 54, 0.9);
+  margin-top: 1.5rem;
+  padding: 1rem 2rem;
+  background: rgba(244, 67, 54, 0.95);
   color: white;
   border: none;
-  border-radius: 25px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  border-radius: 30px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   backdrop-filter: blur(10px);
-  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+  box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  animation: pulse-cancel 2s ease-in-out infinite;
 }
 
 .cancel-button:hover {
@@ -341,6 +343,17 @@
 
 .cancel-icon {
   font-size: 1.1rem;
+}
+
+@keyframes pulse-cancel {
+  0%, 100% { 
+    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 8px 25px rgba(244, 67, 54, 0.6);
+    transform: scale(1.02);
+  }
 }
 
 /* Processing spinner */

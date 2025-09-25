@@ -144,7 +144,7 @@ function App() {
       <div className="main-content">
         <div className="brand-header">
           <h1 className="brand-title">Voice AI Assistant</h1>
-          <p className="brand-subtitle">Enterprise Intelligence</p>
+          <p className="brand-subtitle">AI Voice Interface</p>
         </div>
 
         <div className="voice-interface-card">
@@ -182,7 +182,7 @@ function App() {
           </div>
 
           {/* Cancel button when processing */}
-          {canCancel && (
+          {isProcessing && (
             <button 
               className="cancel-button"
               onClick={handleCancel}
