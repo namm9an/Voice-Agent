@@ -1,0 +1,41 @@
+# Backend
+backend/__pycache__/
+backend/*.py[cod]
+backend/.env
+backend/venv/
+backend/.venv/
+backend/logs/
+backend/temp/
+backend/generated_audio/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/npm-debug.log*
+frontend/yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Application specific
+temp/
+tmp/
+audio_files/
