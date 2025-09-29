@@ -22,6 +22,10 @@ class QwenService:
         if not api_key or not base_url:
             logger.warning("Qwen service not fully configured (missing base URL or API key)")
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        
+        # Conversation memory
+        self.conversation_history = []
+        self.max_history = 10  # Keep last 10 exchanges
 
     async def generate_response(self, text: str) -> str:
         if not text or not text.strip():
@@ -36,11 +40,24 @@ class QwenService:
         )
         async def attempt_chat() -> str:
             try:
+                # Build messages with conversation history
+                messages = []
+                
+                # Add system message for context
+                messages.append({
+                    "role": "system", 
+                    "content": "You are a helpful AI assistant. You can remember our previous conversation and provide contextual responses. Keep responses concise and natural for voice interaction."
+                })
+                
+                # Add conversation history
+                messages.extend(self.conversation_history)
+                
+                # Add current user message
+                messages.append({"role": "user", "content": text})
+                
                 response = await asyncio.wait_for(self.client.chat.completions.create(
                     model=self.settings.qwen_model,
-                    messages=[
-                        {"role": "user", "content": text},
-                    ],
+                    messages=messages,
                     temperature=0.7,
                 ), timeout=10)
 
@@ -50,6 +67,15 @@ class QwenService:
                 content = response.choices[0].message.content
                 if not content:
                     raise QwenServiceError("Empty content from Qwen response")
+                
+                # Add to conversation history
+                self.conversation_history.append({"role": "user", "content": text})
+                self.conversation_history.append({"role": "assistant", "content": content.strip()})
+                
+                # Keep only recent history
+                if len(self.conversation_history) > self.max_history * 2:  # *2 because we store user+assistant pairs
+                    self.conversation_history = self.conversation_history[-self.max_history * 2:]
+                
                 return content.strip()
             except Exception as e:
                 # Bubble up for retry classification

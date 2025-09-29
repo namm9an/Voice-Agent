@@ -28,9 +28,17 @@ class Settings(BaseSettings):
     # Parler primary, XTTS fallback
     parler_tts_base_url: Optional[str] = None
     xtts_tts_base_url: Optional[str] = None
-    tts_voice: Optional[str] = None
-    tts_language: Optional[str] = None
+    tts_voice: str = "female"  # Default to female voice
+    tts_language: str = "en"
     tts_model: str = "parler-tts/parler-tts-mini-v1"
+    
+    # Available voices for Parler TTS
+    available_voices: dict = {
+        "male": "A male speaker with a deep, clear voice delivering his words in a professional manner.",
+        "female": "A female speaker with a warm, clear voice delivering her words in a friendly manner.",
+        "male_casual": "A male speaker with a casual, relaxed tone delivering his words naturally.",
+        "female_casual": "A female speaker with a casual, friendly tone delivering her words naturally."
+    }
 
     # Server
     cors_origins: List[str] = ["http://localhost:3000"]

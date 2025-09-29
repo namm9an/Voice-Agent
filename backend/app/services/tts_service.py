@@ -71,9 +71,14 @@ class TTSService:
 
 async def _call_parler(base_url: str, text: str, settings) -> bytes:
     url = base_url.rstrip('/') + '/tts'
+    
+    # Get voice description from settings
+    voice_key = settings.tts_voice or "female"
+    voice_description = settings.available_voices.get(voice_key, settings.available_voices["female"])
+    
     payload = {
         "text": text,
-        "description": "A female speaker with a slightly low-pitched voice delivers her words quite expressively, in a very confined sounding environment with clear audio quality."
+        "description": voice_description
     }
     timeout = httpx.Timeout(15.0, connect=5.0)
     async with httpx.AsyncClient(timeout=timeout) as client:

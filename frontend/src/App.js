@@ -7,12 +7,19 @@ function App() {
   const [transcript, setTranscript] = useState([]);
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState(null);
+  const [selectedVoice, setSelectedVoice] = useState('female');
+  const [availableVoices, setAvailableVoices] = useState({});
+  const [continuousMode, setContinuousMode] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const audioStreamRef = useRef(null);
+  const vadRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const speechTimeoutRef = useRef(null);
 
   // Initialize audio context for visualization
   useEffect(() => {
@@ -22,6 +29,21 @@ function App() {
         audioContextRef.current.close();
       }
     };
+  }, []);
+
+  // Load available voices on component mount
+  useEffect(() => {
+    const loadVoices = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/v1/voices');
+        const data = await response.json();
+        setAvailableVoices(data.available_voices);
+        setSelectedVoice(data.current_voice || 'female');
+      } catch (error) {
+        console.error('Failed to load voices:', error);
+      }
+    };
+    loadVoices();
   }, []);
 
   const startRecording = async () => {
@@ -103,7 +125,45 @@ function App() {
     analyserRef.current.getByteFrequencyData(dataArray);
     
     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    setAudioLevel(average / 255);
+    const level = average / 255;
+    setAudioLevel(level);
+    
+    // Voice Activity Detection for continuous mode
+    if (continuousMode && isListening) {
+      const threshold = 0.1; // Adjust this value based on testing
+      
+      if (level > threshold) {
+        // Speech detected
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+        
+        if (!isRecording) {
+          // Start recording when speech is detected
+          startRecording();
+        }
+        
+        // Reset speech timeout
+        if (speechTimeoutRef.current) {
+          clearTimeout(speechTimeoutRef.current);
+        }
+        speechTimeoutRef.current = setTimeout(() => {
+          if (isRecording) {
+            stopRecording();
+          }
+        }, 3000); // Stop after 3 seconds of speech
+      } else {
+        // Silence detected
+        if (isRecording && !silenceTimeoutRef.current) {
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (isRecording) {
+              stopRecording();
+            }
+          }, 1500); // Stop after 1.5 seconds of silence
+        }
+      }
+    }
     
     requestAnimationFrame(visualizeAudio);
   };
@@ -154,12 +214,39 @@ function App() {
     }
   };
 
+  // Voice selection handler
+  const handleVoiceChange = async (voiceName) => {
+    try {
+      const response = await fetch(`http://localhost:8001/api/v1/voices/${voiceName}`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        setSelectedVoice(voiceName);
+      }
+    } catch (error) {
+      console.error('Failed to change voice:', error);
+    }
+  };
+
+  // Continuous mode toggle
+  const toggleContinuousMode = () => {
+    setContinuousMode(!continuousMode);
+    if (!continuousMode) {
+      setIsListening(true);
+    } else {
+      setIsListening(false);
+      if (isRecording) {
+        stopRecording();
+      }
+    }
+  };
+
   // Keyboard shortcut
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (e.code === 'Space' && !e.repeat) {
+      if (e.code === 'Space' && !e.repeat && !continuousMode) {
         e.preventDefault();
-    if (isRecording) {
+        if (isRecording) {
           stopRecording();
         } else if (connectionState !== 'processing') {
           startRecording();
@@ -169,7 +256,7 @@ function App() {
     
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isRecording, connectionState]);
+  }, [isRecording, connectionState, continuousMode]);
 
   return (
     <div className="app">
@@ -178,7 +265,6 @@ function App() {
       <div className="main-container">
         <header className="header">
           <h1 className="title">Voice AI Assistant</h1>
-          <p className="subtitle">ENTERPRISE INTELLIGENCE</p>
         </header>
         
         <div className="content-wrapper">
@@ -241,14 +327,42 @@ function App() {
           </button>
 
             <p className="help-text">
-            Press <kbd>Space</kbd> to speak
+              {continuousMode ? 'Continuous listening mode - just speak!' : 'Press Space to speak'}
             </p>
+            
+            {/* Voice Selection */}
+            <div className="voice-selection">
+              <label>Voice:</label>
+              <select 
+                value={selectedVoice} 
+                onChange={(e) => handleVoiceChange(e.target.value)}
+                className="voice-select"
+              >
+                {Object.keys(availableVoices).map(voice => (
+                  <option key={voice} value={voice}>
+                    {voice.charAt(0).toUpperCase() + voice.slice(1).replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Continuous Mode Toggle */}
+            <div className="continuous-mode">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={continuousMode}
+                  onChange={toggleContinuousMode}
+                />
+                Continuous Listening
+              </label>
+            </div>
             
             {error && (
               <div className="error-message">
                 {error}
-          </div>
-        )}
+              </div>
+            )}
       </div>
 
           <div className="transcript-panel">

@@ -219,20 +219,90 @@ body {
   animation: ring 1.5s ease-in-out infinite;
 }
 
-/* Help text */
-.help-text {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.95rem;
-}
+    /* Help text */
+    .help-text {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
 
-kbd {
-  padding: 0.25rem 0.5rem;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  font-family: monospace;
-  font-size: 0.9rem;
-}
+    kbd {
+      padding: 0.25rem 0.5rem;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    /* Voice Selection */
+    .voice-selection {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .voice-selection label {
+      display: block;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .voice-select {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .voice-select:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .voice-select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .voice-select option {
+      background: #1f2937;
+      color: white;
+    }
+
+    /* Continuous Mode */
+    .continuous-mode {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .continuous-mode label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: color 0.3s ease;
+    }
+
+    .continuous-mode label:hover {
+      color: white;
+    }
+
+    .continuous-mode input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
 
 /* Transcript Panel */
 .transcript-panel {

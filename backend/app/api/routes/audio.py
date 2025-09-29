@@ -14,6 +14,7 @@ from scipy.io import wavfile
 from app.services.whisper_service import WhisperService
 from app.services.qwen_service import QwenService
 from app.services.tts_service import TTSService
+from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -91,3 +92,25 @@ async def process_audio(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Processing failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/voices")
+async def get_available_voices():
+    """Get available voice options"""
+    settings = get_settings()
+    return {
+        "available_voices": settings.available_voices,
+        "current_voice": settings.tts_voice
+    }
+
+
+@router.post("/voices/{voice_name}")
+async def set_voice(voice_name: str):
+    """Set the TTS voice"""
+    settings = get_settings()
+    if voice_name not in settings.available_voices:
+        raise HTTPException(status_code=400, detail=f"Voice '{voice_name}' not available")
+    
+    # Update the voice setting (this will persist for the session)
+    settings.tts_voice = voice_name
+    return {"message": f"Voice set to {voice_name}", "voice": voice_name}
