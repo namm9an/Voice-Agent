@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "voice-agent-backend"
+version = "0.1.0"
+description = "Voice Agent Backend - FastAPI application for audio processing"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+fastapi = "==0.109.0"
+uvicorn = {extras = ["standard"], version = "==0.27.0"}
+python-multipart = "==0.0.6"
+python-dotenv = "==1.0.0"
+openai = "==1.10.0"
+httpx = "==0.26.0"
+pydantic = "==2.5.0"
+pydantic-settings = "==2.1.0"
+websockets = "==12.0"
+aiofiles = "==23.2.1"
+numpy = ">=1.22.0,<2.0.0"
+soundfile = "==0.12.1"
+TTS = "==0.22.0"
+tenacity = "==8.2.0"
+scipy = ">=1.11.2,<1.12"
+pydub = "==0.25.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "==7.4.0"
+pytest-asyncio = "==0.21.0"
+black = "==23.12.0"
+flake8 = "==6.1.0"
+pre-commit = "==3.5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
