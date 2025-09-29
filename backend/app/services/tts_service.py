@@ -1,9 +1,12 @@
 """
-Text-to-speech service (Parler TTS primary, XTTS fallback).
+Text-to-speech service (Parler TTS primary, XTTS fallback, beep fallback).
 """
 
 import logging
 import httpx
+import io
+import wave
+import numpy as np
 
 from app.config.settings import get_settings
 from app.utils.error_handlers import TTSServiceError
@@ -17,7 +20,8 @@ class TTSService:
 
     async def synthesize_speech(self, text: str) -> bytes:
         if not text or not text.strip():
-            raise TTSServiceError("Empty text for TTS")
+            logger.warning("Empty text for TTS, generating fallback beep")
+            return self._generate_fallback_beep()
 
         # Try Parler first
         if self.settings.parler_tts_base_url:
@@ -37,7 +41,32 @@ class TTSService:
             except Exception as e:
                 logger.error(f"XTTS fallback failed: {e}")
 
-        raise TTSServiceError("All TTS providers failed")
+        # Final fallback: generate a simple beep
+        logger.warning("All TTS providers failed, using fallback beep")
+        return self._generate_fallback_beep()
+
+    def _generate_fallback_beep(self) -> bytes:
+        """Generate a simple beep sound as fallback"""
+        sample_rate = 16000
+        duration = 1.0  # 1 second
+        frequency = 440  # A4 note
+        
+        # Generate sine wave
+        t = np.linspace(0, duration, int(sample_rate * duration), False)
+        audio_data = np.sin(2 * np.pi * frequency * t) * 0.3  # 30% volume
+        
+        # Convert to 16-bit PCM
+        audio_data = (audio_data * 32767).astype(np.int16)
+        
+        # Create WAV file in memory
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data.tobytes())
+        
+        return wav_buffer.getvalue()
 
 
 async def _call_parler(base_url: str, text: str, settings) -> bytes:
