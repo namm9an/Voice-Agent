@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Whisper-compatible overrides (optional)
     whisper_api_key: Optional[str] = None
     whisper_base_url: Optional[str] = None
+    whisper_model: str = "openai/whisper-large-v3-turbo"
     # Qwen (OpenAI-compatible chat endpoint)
     qwen_base_url: Optional[str] = None
     qwen_api_key: Optional[str] = None
@@ -32,12 +33,12 @@ class Settings(BaseSettings):
     tts_language: str = "en"
     tts_model: str = "parler-tts/parler-tts-mini-v1"
     
-    # Available voices for Parler TTS
+    # Available voices for Parler TTS (using actual voice model names)
     available_voices: dict = {
-        "male": "A male speaker with a deep, clear voice delivering his words in a professional manner.",
-        "female": "A female speaker with a warm, clear voice delivering her words in a friendly manner.",
-        "male_casual": "A male speaker with a casual, relaxed tone delivering his words naturally.",
-        "female_casual": "A female speaker with a casual, friendly tone delivering her words naturally."
+        "male": "Jon",           # High consistency male voice
+        "female": "Lea",         # High consistency female voice  
+        "male_casual": "Gary",   # Casual male voice
+        "female_casual": "Jenny" # Casual female voice
     }
 
     # Server

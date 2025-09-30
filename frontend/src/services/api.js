@@ -46,45 +46,15 @@ api.interceptors.response.use(
   }
 );
 
-// Retry function with exponential backoff and strict limits
-const retryRequest = async (fn, maxRetries = 1, baseDelay = 1000) => { // Reduced maxRetries from 2 to 1
-  let lastError;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-
-      // Don't retry on client errors (4xx) except 408 (timeout)
-      if (error.response?.status >= 400 && error.response?.status < 500 && error.response?.status !== 408) {
-        throw error;
-      }
-
-      // Don't retry on cancellation
-      if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
-        throw error;
-      }
-
-      if (attempt === maxRetries) {
-        throw error;
-      }
-
-      // Shorter delay to prevent long waits
-      const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 3000); // Max 3s delay
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-};
+// No retry logic - fail fast for voice interaction
+// Retries add 1-3s of latency on failures which is unacceptable for voice
 
 export const apiService = {
-  // processAudio(audioBlob) function to upload audio with retry logic
+  // processAudio(audioBlob) function to upload audio - no retry for low latency
   async processAudio(audioBlob) {
     const currentRequestId = ++requestCounter;
 
-    // Debounce rapid calls
+    // Minimal debounce for rapid calls
     if (debounceTimer) clearTimeout(debounceTimer);
 
     return new Promise((resolve) => {
@@ -96,25 +66,21 @@ export const apiService = {
           }
           abortController = new AbortController();
 
-          const result = await retryRequest(async () => {
-            const formData = new FormData();
-            formData.append('audio_file', audioBlob, 'recording.wav');
+          const formData = new FormData();
+          formData.append('audio_file', audioBlob, 'recording.wav');
 
           const response = await api.post('/api/v1/process-audio', formData, {
-              responseType: 'arraybuffer',
-              signal: abortController.signal,
-            timeout: 30000, // 30s timeout per request
-            });
-
-            return response;
+            responseType: 'arraybuffer',
+            signal: abortController.signal,
+            timeout: 15000, // 15s timeout - fail fast
           });
 
-          const responseAudioBlob = new Blob([result.data], { type: 'audio/wav' });
+          const responseAudioBlob = new Blob([response.data], { type: 'audio/wav' });
           const audioUrl = URL.createObjectURL(responseAudioBlob);
-          const transcript = result.headers?.['x-transcript'] || '';
-          const aiText = result.headers?.['x-ai-text'] || '';
+          const transcript = response.headers?.['x-transcript'] || '';
+          const aiText = response.headers?.['x-ai-text'] || '';
 
-          resolve({ success: true, audioUrl, data: result.data, transcript, aiText });
+          resolve({ success: true, audioUrl, data: response.data, transcript, aiText });
         } catch (error) {
           // Handle cancellation specifically
           if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
@@ -123,14 +89,14 @@ export const apiService = {
           }
 
           const userMessage = error.userMessage || error.message || 'Unknown error occurred';
-          resolve({ 
-            success: false, 
-            error: userMessage, 
-            canRetry: !error.response || error.response.status >= 500 || error.response.status === 408, 
-            type: error.response?.status >= 500 ? 'error' : 'warning' 
+          resolve({
+            success: false,
+            error: userMessage,
+            canRetry: !error.response || error.response.status >= 500 || error.response.status === 408,
+            type: error.response?.status >= 500 ? 'error' : 'warning'
           });
         }
-      }, 100); // Reduced debounce from 200ms to 100ms
+      }, 20); // Reduced debounce from 100ms to 20ms for minimal delay
     });
   },
 

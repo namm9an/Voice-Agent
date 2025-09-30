@@ -27,8 +27,8 @@ class TTSService:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create reusable HTTP client"""
         if self._client is None or self._client.is_closed:
-            # Increased timeout for longer TTS processing
-            timeout = httpx.Timeout(30.0, connect=10.0, read=25.0)
+            # Optimized timeout for voice model-based TTS
+            timeout = httpx.Timeout(20.0, connect=5.0, read=15.0)
             self._client = httpx.AsyncClient(timeout=timeout)
         return self._client
 
@@ -139,19 +139,41 @@ class TTSService:
         
         return wav_buffer.getvalue()
 
+    async def _try_fast_tts_fallback(self, text: str) -> bytes:
+        """Try a fast TTS fallback service"""
+        try:
+            # Try using a simple HTTP TTS service as fallback
+            # This is a placeholder - you could integrate with other TTS services
+            logger.info("Attempting fast TTS fallback...")
+            
+            # For now, return None to use beep fallback
+            # In the future, you could integrate with:
+            # - Google TTS API
+            # - Azure Speech Services  
+            # - AWS Polly
+            # - Local TTS engines
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Fast TTS fallback failed: {e}")
+            return None
+
 
 async def _call_parler(base_url: str, text: str, settings, client: httpx.AsyncClient) -> bytes:
     url = base_url.rstrip('/') + '/tts'
     logger.info(f"Parler TTS URL: {url}")
 
-    # Get voice description from settings
+    # Get voice model name from settings
     voice_key = settings.tts_voice or "female"
-    voice_description = settings.available_voices.get(voice_key, settings.available_voices["female"])
-    logger.info(f"Using voice: {voice_key} - {voice_description[:50]}...")
+    voice_model = settings.available_voices.get(voice_key, settings.available_voices["female"])
+    logger.info(f"Using voice model: {voice_key} -> {voice_model}")
 
+    # Use proper Parler TTS API format with voice model
     payload = {
         "text": text,
-        "description": voice_description
+        "voice": voice_model,
+        "model": settings.tts_model
     }
     
     try:

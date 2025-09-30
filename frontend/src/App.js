@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
+// Generate unique session ID for this browser session
+const SESSION_ID = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 function App() {
   const [connectionState, setConnectionState] = useState('disconnected');
   const [isRecording, setIsRecording] = useState(false);
@@ -11,7 +14,7 @@ function App() {
   const [availableVoices, setAvailableVoices] = useState({});
   const [continuousMode, setContinuousMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
@@ -20,6 +23,7 @@ function App() {
   const vadRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
   const speechTimeoutRef = useRef(null);
+  const currentAudioRef = useRef(null);
 
   // Initialize audio context for visualization
   useEffect(() => {
@@ -35,7 +39,7 @@ function App() {
   useEffect(() => {
     const loadVoices = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/v1/voices');
+        const response = await fetch('http://localhost:8000/api/v1/voices');
         const data = await response.json();
         setAvailableVoices(data.available_voices);
         setSelectedVoice(data.current_voice || 'female');
@@ -170,43 +174,70 @@ function App() {
 
   const processAudio = async (audioBlob) => {
     setConnectionState('processing');
-    
-    // Add user message to transcript
-    setTranscript(prev => [...prev, { 
-      type: 'user', 
-      text: 'Audio message', 
-      timestamp: new Date().toISOString() 
-    }]);
-    
+
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'recording.webm');
-      
-      const response = await fetch('http://localhost:8001/api/v1/process-audio', {
+
+      const response = await fetch('http://localhost:8000/api/v1/process-audio', {
         method: 'POST',
         body: formData,
+        headers: {
+          'X-Session-ID': SESSION_ID
+        }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
-      
+
+      // Extract transcription and AI response from headers
+      const transcription = response.headers.get('X-Transcription') || 'Audio message';
+      const aiResponse = response.headers.get('X-AI-Response') || 'Response received';
+
+      // Add user message to transcript
+      setTranscript(prev => [...prev, {
+        type: 'user',
+        text: transcription,
+        timestamp: new Date().toISOString()
+      }]);
+
       const audioResponse = await response.blob();
-      
+
+      // Clean up previous audio URL if exists
+      if (currentAudioRef.current) {
+        URL.revokeObjectURL(currentAudioRef.current);
+      }
+
       // Play the response
       const audioUrl = URL.createObjectURL(audioResponse);
+      currentAudioRef.current = audioUrl;
       const audio = new Audio(audioUrl);
-      
+
       // Add AI response to transcript
-      setTranscript(prev => [...prev, { 
-        type: 'agent', 
-        text: 'Response received', 
-        timestamp: new Date().toISOString() 
+      setTranscript(prev => [...prev, {
+        type: 'agent',
+        text: aiResponse,
+        timestamp: new Date().toISOString()
       }]);
-      
+
+      // Clean up audio URL after playback completes
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        currentAudioRef.current = null;
+      };
+
+      // Handle playback errors
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
+        URL.revokeObjectURL(audioUrl);
+        currentAudioRef.current = null;
+        setError('Failed to play audio response');
+      };
+
       await audio.play();
       setConnectionState('connected');
-      
+
     } catch (err) {
       console.error('Processing failed:', err);
       setError(`Failed to process audio: ${err.message}`);
@@ -217,7 +248,7 @@ function App() {
   // Voice selection handler
   const handleVoiceChange = async (voiceName) => {
     try {
-      const response = await fetch(`http://localhost:8001/api/v1/voices/${voiceName}`, {
+      const response = await fetch(`http://localhost:8000/api/v1/voices/${voiceName}`, {
         method: 'POST'
       });
       if (response.ok) {
@@ -340,7 +371,7 @@ function App() {
               >
                 {Object.keys(availableVoices).map(voice => (
                   <option key={voice} value={voice}>
-                    {voice.charAt(0).toUpperCase() + voice.slice(1).replace('_', ' ')}
+                    {voice.charAt(0).toUpperCase() + voice.slice(1).replace('_', ' ')} ({availableVoices[voice]})
                   </option>
                 ))}
               </select>

@@ -1,13 +1,15 @@
 """
 FastAPI application entry point with CORS, basic routes, and WebSocket endpoint
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.api.routes.audio import router as audio_router
 from app.api.routes.health import router as health_router
+from app.api.websockets.voice_stream import get_voice_stream_handler
 from app.utils.logger import setup_logging
+from typing import Optional
 import time
 
 setup_logging()
@@ -45,9 +47,27 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(audio_router, prefix="/api/v1")
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket):
-    # TODO: Implement in Phase 2
-    pass
+async def websocket_endpoint(
+    websocket: WebSocket,
+    session_id: Optional[str] = Query(None)
+):
+    """
+    WebSocket endpoint for real-time voice streaming
+
+    Query params:
+        session_id: Optional session identifier for conversation context
+
+    Usage:
+        ws://localhost:8000/ws?session_id=my-session
+    """
+    # Generate session ID if not provided
+    if not session_id:
+        import uuid
+        session_id = f"ws_{uuid.uuid4().hex[:12]}"
+
+    # Get handler and process connection
+    handler = get_voice_stream_handler()
+    await handler.handle_connection(websocket, session_id=session_id)
 
 
 @app.exception_handler(Exception)

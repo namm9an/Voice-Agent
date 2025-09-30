@@ -23,6 +23,8 @@ TTS = "==0.22.0"
 tenacity = "==8.2.0"
 scipy = ">=1.11.2,<1.12"
 pydub = "==0.25.1"
+webrtcvad = "==2.0.10"
+aiohttp = "==3.9.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==7.4.0"
