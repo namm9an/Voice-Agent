@@ -43,8 +43,17 @@ function App() {
         const data = await response.json();
         setAvailableVoices(data.available_voices);
         setSelectedVoice(data.current_voice || 'female');
+        console.log('Voices loaded:', data.available_voices);
       } catch (error) {
         console.error('Failed to load voices:', error);
+        // Set default voices as fallback
+        setAvailableVoices({
+          "male": "Jon",
+          "female": "Lea", 
+          "male_casual": "Gary",
+          "female_casual": "Jenny"
+        });
+        setSelectedVoice('female');
       }
     };
     loadVoices();
@@ -253,6 +262,9 @@ function App() {
       });
       if (response.ok) {
         setSelectedVoice(voiceName);
+        console.log(`Voice changed to: ${voiceName}`);
+      } else {
+        console.error('Failed to change voice:', response.status);
       }
     } catch (error) {
       console.error('Failed to change voice:', error);
