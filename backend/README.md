@@ -17,10 +17,13 @@ poetry install
 3. Environment configuration:
 Set variables in your shell or create a `.env` file (optional). Examples:
 ```
-OPENAI_API_KEY=<your_whisper_api_key>
-QWEN_ENDPOINT=<your_qwen_model_endpoint>
-QWEN_API_KEY=<your_qwen_api_key>
-TTS_MODEL=coqui
+LLM_API_KEY=<your_phi3_api_key>
+LLM_BASE_URL=<your_phi3_endpoint>
+LLM_MODEL=microsoft/Phi-3.5-mini-instruct
+WHISPER_API_KEY=<your_whisper_api_key>
+WHISPER_BASE_URL=<your_whisper_endpoint>
+WHISPER_MODEL=openai/whisper-large-v3-turbo
+PARLER_TTS_BASE_URL=<your_tts_endpoint>
 CORS_ORIGINS=http://localhost:3000
 LOG_LEVEL=INFO
 MAX_AUDIO_SIZE_MB=10
@@ -60,5 +63,5 @@ poetry run flake8 .
 
 ✅ Project structure created
 ✅ Dependencies configured
-✅ Placeholder services implemented
-⏳ Phase 2: Actual integrations (Whisper, Qwen, TTS)
+✅ Services implemented (Whisper, Phi-3.5, TTS)
+✅ Phase 2: Complete - All integrations working

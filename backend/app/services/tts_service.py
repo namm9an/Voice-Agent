@@ -27,8 +27,8 @@ class TTSService:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create reusable HTTP client"""
         if self._client is None or self._client.is_closed:
-            # Optimized timeout for voice model-based TTS
-            timeout = httpx.Timeout(20.0, connect=5.0, read=15.0)
+            # Increased timeout for longer text responses (like ChatGPT voice mode)
+            timeout = httpx.Timeout(60.0, connect=10.0, read=50.0)
             self._client = httpx.AsyncClient(timeout=timeout)
         return self._client
 
@@ -48,45 +48,53 @@ class TTSService:
             logger.warning("Empty text for TTS, generating fallback beep")
             return self._generate_fallback_beep()
 
-        # Check text length - very long texts are more likely to timeout
-        if len(text) > 500:
-            logger.warning(f"Long text detected ({len(text)} chars), TTS may take longer or timeout")
-
-        # Check cache first
+        # Check cache first for exact match
         cache_key = self._get_cache_key(text)
         if cache_key in self._cache:
             logger.info(f"TTS cache hit for text: {text[:50]}...")
             return self._cache[cache_key]
+
+        # For long texts (>100 chars), split into sentences and synthesize in chunks
+        if len(text) > 100:
+            logger.info(f"Long text detected ({len(text)} chars), using chunked synthesis")
+            return await self._synthesize_chunked(text, cache_key)
 
         # Try Parler first with retry logic
         if self.settings.parler_tts_base_url:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    logger.info(f"Attempting Parler TTS (attempt {attempt + 1}/{max_retries + 1}) with URL: {self.settings.parler_tts_base_url}")
+                    logger.info(f"Attempting Parler TTS (attempt {attempt + 1}/{max_retries + 1})")
+                    logger.info(f"Text length: {len(text)} chars, URL: {self.settings.parler_tts_base_url}")
+                    import time
+                    start_time = time.time()
+
                     audio = await _call_parler(
                         self.settings.parler_tts_base_url,
                         text,
                         self.settings,
                         await self._get_client()
                     )
+
+                    elapsed = time.time() - start_time
                     if audio:
-                        logger.info(f"Parler TTS successful, generated {len(audio)} bytes")
+                        logger.info(f"✓ Parler TTS successful in {elapsed:.2f}s, generated {len(audio)} bytes")
                         self._add_to_cache(cache_key, audio)
                         return audio
                     else:
-                        logger.warning("Parler TTS returned empty audio")
+                        logger.warning(f"✗ Parler TTS returned empty audio after {elapsed:.2f}s")
                         break  # Don't retry if we got empty audio
                 except httpx.TimeoutException as e:
-                    logger.warning(f"Parler TTS timeout on attempt {attempt + 1}: {e}")
+                    elapsed = time.time() - start_time
+                    logger.warning(f"✗ Parler TTS timeout after {elapsed:.2f}s on attempt {attempt + 1}: {e}")
                     if attempt < max_retries:
                         logger.info(f"Retrying Parler TTS in 2 seconds...")
                         await asyncio.sleep(2)
                         continue
                     else:
-                        logger.error(f"Parler TTS failed after {max_retries + 1} attempts due to timeout")
+                        logger.error(f"✗ Parler TTS failed after {max_retries + 1} attempts due to timeout")
                 except Exception as e:
-                    logger.error(f"Parler TTS failed with error: {e}", exc_info=True)
+                    logger.error(f"✗ Parler TTS failed with error: {e}", exc_info=True)
                     break  # Don't retry on non-timeout errors
 
         # Fallback XTTS
@@ -115,6 +123,206 @@ class TTSService:
             oldest_key = next(iter(self._cache))
             del self._cache[oldest_key]
         self._cache[key] = audio
+
+    def _split_into_sentences(self, text: str) -> list[str]:
+        """Split text into sentences for chunked synthesis"""
+        import re
+        # Split on sentence boundaries (., !, ?, but not Mr., Dr., etc.)
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+
+        # Group small sentences together (target ~50-150 chars per chunk)
+        chunks = []
+        current_chunk = ""
+
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) < 150:
+                current_chunk += " " + sentence if current_chunk else sentence
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence
+
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+
+        return chunks
+
+    async def _synthesize_chunked(self, text: str, full_cache_key: str) -> bytes:
+        """Synthesize long text in chunks and concatenate"""
+        chunks = self._split_into_sentences(text)
+        logger.info(f"Split text into {len(chunks)} chunks for synthesis")
+
+        # Synthesize each chunk
+        audio_chunks = []
+        for i, chunk in enumerate(chunks):
+            logger.info(f"Synthesizing chunk {i+1}/{len(chunks)}: {chunk[:50]}...")
+
+            # Check cache for this chunk
+            chunk_cache_key = self._get_cache_key(chunk)
+            if chunk_cache_key in self._cache:
+                logger.info(f"Cache hit for chunk {i+1}")
+                audio_chunks.append(self._cache[chunk_cache_key])
+                continue
+
+            # Synthesize this chunk (short text, use direct synthesis)
+            chunk_audio = await self._synthesize_direct(chunk)
+            if chunk_audio:
+                audio_chunks.append(chunk_audio)
+                self._add_to_cache(chunk_cache_key, chunk_audio)
+            else:
+                logger.warning(f"Failed to synthesize chunk {i+1}, skipping")
+
+        if not audio_chunks:
+            logger.error("All chunks failed to synthesize")
+            return self._generate_fallback_beep()
+
+        # Concatenate audio chunks
+        combined_audio = self._concatenate_wav_files(audio_chunks)
+        logger.info(f"Concatenated {len(audio_chunks)} chunks into {len(combined_audio)} bytes")
+
+        # Verify the concatenated WAV is valid
+        try:
+            test_wav = io.BytesIO(combined_audio)
+            with wave.open(test_wav, 'rb') as wav:
+                logger.info(f"Final WAV: {wav.getnchannels()}ch, {wav.getframerate()}Hz, {wav.getnframes()} frames")
+        except Exception as e:
+            logger.error(f"Invalid concatenated WAV: {e}")
+            return self._generate_fallback_beep()
+
+        # Cache the full result
+        self._add_to_cache(full_cache_key, combined_audio)
+
+        return combined_audio
+
+    async def _synthesize_direct(self, text: str) -> bytes:
+        """Direct synthesis for a single chunk (no caching, no chunking)"""
+        # Try Parler first with retry logic
+        if self.settings.parler_tts_base_url:
+            max_retries = 1  # Fewer retries for chunks
+            for attempt in range(max_retries + 1):
+                try:
+                    import time
+                    start_time = time.time()
+
+                    audio = await _call_parler(
+                        self.settings.parler_tts_base_url,
+                        text,
+                        self.settings,
+                        await self._get_client()
+                    )
+
+                    elapsed = time.time() - start_time
+                    if audio:
+                        logger.info(f"✓ Parler chunk TTS in {elapsed:.2f}s, {len(audio)} bytes")
+                        return audio
+                    else:
+                        logger.warning(f"✗ Parler returned empty audio after {elapsed:.2f}s")
+                        break
+                except httpx.TimeoutException as e:
+                    logger.warning(f"✗ Parler chunk TTS timeout: {e}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        break
+                except Exception as e:
+                    logger.error(f"✗ Parler chunk TTS error: {e}")
+                    break
+
+        # Fallback XTTS
+        if self.settings.xtts_tts_base_url:
+            try:
+                audio = await _call_xtts(
+                    self.settings.xtts_tts_base_url,
+                    text,
+                    self.settings,
+                    await self._get_client()
+                )
+                if audio:
+                    return audio
+            except Exception as e:
+                logger.error(f"XTTS chunk fallback failed: {e}")
+
+        # Return None if all fail - caller will handle fallback
+        return None
+
+    def _concatenate_wav_files(self, audio_chunks: list[bytes]) -> bytes:
+        """Concatenate multiple WAV files into a single WAV file using pydub for better compatibility"""
+        if not audio_chunks:
+            return self._generate_fallback_beep()
+
+        if len(audio_chunks) == 1:
+            return audio_chunks[0]
+
+        try:
+            from pydub import AudioSegment
+
+            # Load all audio chunks as AudioSegments
+            segments = []
+            for i, chunk in enumerate(audio_chunks):
+                try:
+                    segment = AudioSegment.from_wav(io.BytesIO(chunk))
+                    segments.append(segment)
+                    logger.info(f"Loaded chunk {i+1}: duration={len(segment)}ms")
+                except Exception as e:
+                    logger.error(f"Failed to load chunk {i+1}: {e}")
+                    continue
+
+            if not segments:
+                logger.error("No valid audio segments to concatenate")
+                return self._generate_fallback_beep()
+
+            # Concatenate all segments
+            combined = segments[0]
+            for segment in segments[1:]:
+                combined += segment
+
+            logger.info(f"Combined audio: duration={len(combined)}ms")
+
+            # Export as WAV
+            output = io.BytesIO()
+            combined.export(output, format="wav")
+            result = output.getvalue()
+
+            logger.info(f"Concatenated WAV: {len(result)} bytes")
+            return result
+
+        except Exception as e:
+            logger.error(f"pydub concatenation failed: {e}, falling back to wave module")
+            # Fallback to wave module concatenation
+            return self._concatenate_wav_files_basic(audio_chunks)
+
+    def _concatenate_wav_files_basic(self, audio_chunks: list[bytes]) -> bytes:
+        """Basic WAV concatenation using wave module (fallback)"""
+        if len(audio_chunks) == 1:
+            return audio_chunks[0]
+
+        # Parse the first WAV to get format info
+        first_wav = io.BytesIO(audio_chunks[0])
+        with wave.open(first_wav, 'rb') as wav:
+            channels = wav.getnchannels()
+            sampwidth = wav.getsampwidth()
+            framerate = wav.getframerate()
+
+        # Extract audio data from all chunks
+        all_frames = []
+        for chunk in audio_chunks:
+            chunk_io = io.BytesIO(chunk)
+            with wave.open(chunk_io, 'rb') as wav:
+                all_frames.append(wav.readframes(wav.getnframes()))
+
+        # Combine all frames
+        combined_frames = b''.join(all_frames)
+
+        # Create new WAV file with combined audio
+        output = io.BytesIO()
+        with wave.open(output, 'wb') as wav_out:
+            wav_out.setnchannels(channels)
+            wav_out.setsampwidth(sampwidth)
+            wav_out.setframerate(framerate)
+            wav_out.writeframes(combined_frames)
+
+        return output.getvalue()
 
     def _generate_fallback_beep(self) -> bytes:
         """Generate a simple beep sound as fallback"""
@@ -164,16 +372,15 @@ async def _call_parler(base_url: str, text: str, settings, client: httpx.AsyncCl
     url = base_url.rstrip('/') + '/tts'
     logger.info(f"Parler TTS URL: {url}")
 
-    # Get voice model name from settings
+    # Get voice description from settings
     voice_key = settings.tts_voice or "female"
-    voice_model = settings.available_voices.get(voice_key, settings.available_voices["female"])
-    logger.info(f"Using voice model: {voice_key} -> {voice_model}")
+    voice_description = settings.available_voices.get(voice_key, settings.available_voices["female"])
+    logger.info(f"Using voice: {voice_key} - {voice_description[:50]}...")
 
-    # Use proper Parler TTS API format with voice model
+    # Use proper Parler TTS API format with description
     payload = {
         "text": text,
-        "voice": voice_model,
-        "model": settings.tts_model
+        "description": voice_description
     }
     
     try:

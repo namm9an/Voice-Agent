@@ -20,10 +20,14 @@ class Settings(BaseSettings):
     whisper_api_key: Optional[str] = None
     whisper_base_url: Optional[str] = None
     whisper_model: str = "openai/whisper-large-v3-turbo"
-    # Qwen (OpenAI-compatible chat endpoint)
+    # LLM (OpenAI-compatible chat endpoint) - Phi-3.5-mini-instruct
+    llm_base_url: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_model: str = "microsoft/Phi-3.5-mini-instruct"
+    # Legacy qwen settings (deprecated, use llm_* instead)
     qwen_base_url: Optional[str] = None
     qwen_api_key: Optional[str] = None
-    qwen_model: str = "Qwen/Qwen2.5-14B-Instruct"
+    qwen_model: Optional[str] = None
 
     # TTS
     # Parler primary, XTTS fallback
@@ -33,12 +37,12 @@ class Settings(BaseSettings):
     tts_language: str = "en"
     tts_model: str = "parler-tts/parler-tts-mini-v1"
     
-    # Available voices for Parler TTS (using actual voice model names)
+    # Available voices for Parler TTS (using speaker names in descriptions)
     available_voices: dict = {
-        "male": "Jon",           # High consistency male voice
-        "female": "Lea",         # High consistency female voice  
-        "male_casual": "Gary",   # Casual male voice
-        "female_casual": "Jenny" # Casual female voice
+        "male": "Jon's voice is monotone yet slightly fast in delivery, with a very close recording that almost has no background noise.",
+        "female": "Lea's voice is warm and clear, delivering her words in a friendly manner with good audio quality.",
+        "male_casual": "Gary's voice is casual and relaxed, speaking naturally with a conversational tone.",
+        "female_casual": "Jenny's voice is casual and friendly, speaking naturally with a warm conversational tone."
     }
 
     # Server

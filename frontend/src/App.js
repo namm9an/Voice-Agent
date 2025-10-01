@@ -381,11 +381,15 @@ function App() {
                 onChange={(e) => handleVoiceChange(e.target.value)}
                 className="voice-select"
               >
-                {Object.keys(availableVoices).map(voice => (
-                  <option key={voice} value={voice}>
-                    {voice.charAt(0).toUpperCase() + voice.slice(1).replace('_', ' ')} ({availableVoices[voice]})
-                  </option>
-                ))}
+                {Object.keys(availableVoices).map(voice => {
+                  // Extract speaker name from description (e.g., "Jon's voice..." -> "Jon")
+                  const speakerName = availableVoices[voice].split("'")[0];
+                  return (
+                    <option key={voice} value={voice}>
+                      {voice.charAt(0).toUpperCase() + voice.slice(1).replace('_', ' ')} ({speakerName})
+                    </option>
+                  );
+                })}
               </select>
             </div>
             

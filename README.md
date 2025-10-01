@@ -4,7 +4,7 @@ AI-powered voice interaction application with audio-in, audio-out conversational
 
 ## Architecture
 
-- **Backend**: FastAPI with Whisper (transcription) + Qwen (LLM) + TTS
+- **Backend**: FastAPI with Whisper (transcription) + Phi-3.5 (LLM) + TTS
 - **Frontend**: React with Web Audio API for voice recording and playback
 - **Communication**: HTTP API and WebSocket for real-time streaming
 
@@ -30,7 +30,7 @@ Visit http://localhost:3000
 
 - 🎤 Voice recording with Web Audio API
 - 🔤 Speech transcription via OpenAI Whisper
-- 🤖 AI conversation with Qwen language model
+- 🤖 AI conversation with microsoft/Phi-3.5-mini-instruct language model
 - 🔊 Text-to-speech response generation
 - ⚡ Real-time WebSocket communication
 - 📱 Responsive web interface
@@ -54,9 +54,10 @@ voice-agent/
 ### Environment Variables
 
 Backend (.env):
-- OPENAI_API_KEY
-- QWEN_ENDPOINT
-- QWEN_API_KEY
+- LLM_API_KEY (for Phi-3.5)
+- LLM_BASE_URL (for Phi-3.5)
+- WHISPER_API_KEY
+- WHISPER_BASE_URL
 
 Frontend (.env):
 - REACT_APP_API_URL
