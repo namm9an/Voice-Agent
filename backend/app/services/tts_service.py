@@ -23,6 +23,7 @@ class TTSService:
         self._client: Optional[httpx.AsyncClient] = None
         self._cache: Dict[str, bytes] = {}  # Simple in-memory cache
         self._cache_max_size = 100  # Maximum cached responses
+        self._session_voices: Dict[str, str] = {}  # session_id -> voice_name mapping
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create reusable HTTP client"""
@@ -37,19 +38,30 @@ class TTSService:
         if self._client and not self._client.is_closed:
             await self._client.close()
 
-    def _get_cache_key(self, text: str) -> str:
-        """Generate cache key from text and voice settings"""
-        voice_key = self.settings.tts_voice or "female"
-        cache_input = f"{text}:{voice_key}"
+    def set_voice(self, session_id: str, voice_name: str):
+        """Set voice for a specific session"""
+        self._session_voices[session_id] = voice_name
+        logger.info(f"Voice set to '{voice_name}' for session {session_id}")
+
+    def get_voice(self, session_id: str = "default") -> str:
+        """Get voice for a specific session"""
+        return self._session_voices.get(session_id, self.settings.tts_voice or "female")
+
+    def _get_cache_key(self, text: str, voice: str) -> str:
+        """Generate cache key from text and voice"""
+        cache_input = f"{text}:{voice}"
         return hashlib.md5(cache_input.encode()).hexdigest()
 
-    async def synthesize_speech(self, text: str) -> bytes:
+    async def synthesize_speech(self, text: str, session_id: str = "default") -> bytes:
         if not text or not text.strip():
             logger.warning("Empty text for TTS, generating fallback beep")
             return self._generate_fallback_beep()
 
+        # Get voice for this session
+        voice = self.get_voice(session_id)
+
         # Check cache first for exact match
-        cache_key = self._get_cache_key(text)
+        cache_key = self._get_cache_key(text, voice)
         if cache_key in self._cache:
             logger.info(f"TTS cache hit for text: {text[:50]}...")
             return self._cache[cache_key]
@@ -57,7 +69,7 @@ class TTSService:
         # For long texts (>100 chars), split into sentences and synthesize in chunks
         if len(text) > 100:
             logger.info(f"Long text detected ({len(text)} chars), using chunked synthesis")
-            return await self._synthesize_chunked(text, cache_key)
+            return await self._synthesize_chunked(text, cache_key, voice, session_id)
 
         # Try Parler first with retry logic
         if self.settings.parler_tts_base_url:
@@ -72,6 +84,7 @@ class TTSService:
                     audio = await _call_parler(
                         self.settings.parler_tts_base_url,
                         text,
+                        voice,
                         self.settings,
                         await self._get_client()
                     )
@@ -103,6 +116,7 @@ class TTSService:
                 audio = await _call_xtts(
                     self.settings.xtts_tts_base_url,
                     text,
+                    voice,
                     self.settings,
                     await self._get_client()
                 )
@@ -130,12 +144,12 @@ class TTSService:
         # Split on sentence boundaries (., !, ?, but not Mr., Dr., etc.)
         sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
 
-        # Group small sentences together (target ~50-150 chars per chunk)
+        # Group small sentences together (target ~30-60 chars per chunk for better quality)
         chunks = []
         current_chunk = ""
 
         for sentence in sentences:
-            if len(current_chunk) + len(sentence) < 150:
+            if len(current_chunk) + len(sentence) < 60:
                 current_chunk += " " + sentence if current_chunk else sentence
             else:
                 if current_chunk:
@@ -147,7 +161,7 @@ class TTSService:
 
         return chunks
 
-    async def _synthesize_chunked(self, text: str, full_cache_key: str) -> bytes:
+    async def _synthesize_chunked(self, text: str, full_cache_key: str, voice: str, session_id: str) -> bytes:
         """Synthesize long text in chunks and concatenate"""
         chunks = self._split_into_sentences(text)
         logger.info(f"Split text into {len(chunks)} chunks for synthesis")
@@ -158,14 +172,14 @@ class TTSService:
             logger.info(f"Synthesizing chunk {i+1}/{len(chunks)}: {chunk[:50]}...")
 
             # Check cache for this chunk
-            chunk_cache_key = self._get_cache_key(chunk)
+            chunk_cache_key = self._get_cache_key(chunk, voice)
             if chunk_cache_key in self._cache:
                 logger.info(f"Cache hit for chunk {i+1}")
                 audio_chunks.append(self._cache[chunk_cache_key])
                 continue
 
             # Synthesize this chunk (short text, use direct synthesis)
-            chunk_audio = await self._synthesize_direct(chunk)
+            chunk_audio = await self._synthesize_direct(chunk, voice)
             if chunk_audio:
                 audio_chunks.append(chunk_audio)
                 self._add_to_cache(chunk_cache_key, chunk_audio)
@@ -194,7 +208,7 @@ class TTSService:
 
         return combined_audio
 
-    async def _synthesize_direct(self, text: str) -> bytes:
+    async def _synthesize_direct(self, text: str, voice: str) -> bytes:
         """Direct synthesis for a single chunk (no caching, no chunking)"""
         # Try Parler first with retry logic
         if self.settings.parler_tts_base_url:
@@ -207,6 +221,7 @@ class TTSService:
                     audio = await _call_parler(
                         self.settings.parler_tts_base_url,
                         text,
+                        voice,
                         self.settings,
                         await self._get_client()
                     )
@@ -235,6 +250,7 @@ class TTSService:
                 audio = await _call_xtts(
                     self.settings.xtts_tts_base_url,
                     text,
+                    voice,
                     self.settings,
                     await self._get_client()
                 )
@@ -368,12 +384,11 @@ class TTSService:
             return None
 
 
-async def _call_parler(base_url: str, text: str, settings, client: httpx.AsyncClient) -> bytes:
+async def _call_parler(base_url: str, text: str, voice_key: str, settings, client: httpx.AsyncClient) -> bytes:
     url = base_url.rstrip('/') + '/tts'
     logger.info(f"Parler TTS URL: {url}")
 
     # Get voice description from settings
-    voice_key = settings.tts_voice or "female"
     voice_description = settings.available_voices.get(voice_key, settings.available_voices["female"])
     logger.info(f"Using voice: {voice_key} - {voice_description[:50]}...")
 
@@ -411,11 +426,11 @@ async def _call_parler(base_url: str, text: str, settings, client: httpx.AsyncCl
         raise
 
 
-async def _call_xtts(base_url: str, text: str, settings, client: httpx.AsyncClient) -> bytes:
+async def _call_xtts(base_url: str, text: str, voice_key: str, settings, client: httpx.AsyncClient) -> bytes:
     url = base_url.rstrip('/') + '/synthesize'
     payload = {
         "text": text,
-        "voice": settings.tts_voice or "default",
+        "voice": voice_key,
         "language": settings.tts_language or "en",
         "format": "wav",
     }

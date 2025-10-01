@@ -218,10 +218,22 @@ function App() {
         URL.revokeObjectURL(currentAudioRef.current);
       }
 
+      // Stop any currently playing audio
+      if (currentAudioRef.current) {
+        const oldAudio = currentAudioRef.current.audio;
+        if (oldAudio) {
+          oldAudio.pause();
+          oldAudio.currentTime = 0;
+        }
+        if (currentAudioRef.current.url) {
+          URL.revokeObjectURL(currentAudioRef.current.url);
+        }
+      }
+
       // Play the response
       const audioUrl = URL.createObjectURL(audioResponse);
-      currentAudioRef.current = audioUrl;
       const audio = new Audio(audioUrl);
+      currentAudioRef.current = { audio, url: audioUrl };
 
       // Add AI response to transcript
       setTranscript(prev => [...prev, {
@@ -234,6 +246,7 @@ function App() {
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
         currentAudioRef.current = null;
+        setConnectionState('connected');
       };
 
       // Handle playback errors
@@ -242,10 +255,11 @@ function App() {
         URL.revokeObjectURL(audioUrl);
         currentAudioRef.current = null;
         setError('Failed to play audio response');
+        setConnectionState('connected');
       };
 
       await audio.play();
-      setConnectionState('connected');
+      setConnectionState('playing');
 
     } catch (err) {
       console.error('Processing failed:', err);
@@ -258,16 +272,35 @@ function App() {
   const handleVoiceChange = async (voiceName) => {
     try {
       const response = await fetch(`http://localhost:8000/api/v1/voices/${voiceName}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'X-Session-ID': SESSION_ID
+        }
       });
       if (response.ok) {
         setSelectedVoice(voiceName);
-        console.log(`Voice changed to: ${voiceName}`);
+        console.log(`Voice changed to: ${voiceName} for session ${SESSION_ID}`);
       } else {
         console.error('Failed to change voice:', response.status);
       }
     } catch (error) {
       console.error('Failed to change voice:', error);
+    }
+  };
+
+  // Stop audio playback
+  const stopAudio = () => {
+    if (currentAudioRef.current) {
+      const { audio, url } = currentAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+      currentAudioRef.current = null;
+      setConnectionState('connected');
     }
   };
 
@@ -372,7 +405,17 @@ function App() {
             <p className="help-text">
               {continuousMode ? 'Continuous listening mode - just speak!' : 'Press Space to speak'}
             </p>
-            
+
+            {/* Stop Audio Button */}
+            {connectionState === 'playing' && (
+              <button className="stop-audio-button" onClick={stopAudio}>
+                <svg className="icon" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" />
+                </svg>
+                Stop Audio
+              </button>
+            )}
+
             {/* Voice Selection */}
             <div className="voice-selection">
               <label>Voice:</label>

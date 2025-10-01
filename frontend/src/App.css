@@ -235,6 +235,40 @@ body {
       font-size: 0.9rem;
     }
 
+    /* Stop Audio Button */
+    .stop-audio-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 1rem auto;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+
+    .stop-audio-button:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+    }
+
+    .stop-audio-button:active {
+      transform: translateY(0);
+    }
+
+    .stop-audio-button .icon {
+      width: 16px;
+      height: 16px;
+    }
+
     /* Voice Selection */
     .voice-selection {
       margin: 1rem 0;

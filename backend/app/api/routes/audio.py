@@ -111,7 +111,7 @@ async def process_audio(
         ai_response = await get_qwen_service().generate_response(transcription, session_id=session_id)
         logger.info(f"AI Response: {ai_response}")
 
-        audio_response = await get_tts_service().synthesize_speech(ai_response)
+        audio_response = await get_tts_service().synthesize_speech(ai_response, session_id=session_id)
         logger.info(f"TTS Generated: {len(audio_response)} bytes")
 
         # Sanitize text for HTTP headers (remove newlines and control characters)
@@ -158,12 +158,15 @@ async def get_available_voices():
 
 
 @router.post("/voices/{voice_name}")
-async def set_voice(voice_name: str):
-    """Set the TTS voice"""
+async def set_voice(voice_name: str, x_session_id: Optional[str] = Header(None, alias="X-Session-ID")):
+    """Set the TTS voice for a session"""
     settings = get_settings()
     if voice_name not in settings.available_voices:
         raise HTTPException(status_code=400, detail=f"Voice '{voice_name}' not available")
-    
-    # Update the voice setting (this will persist for the session)
-    settings.tts_voice = voice_name
+
+    session_id = x_session_id or "default"
+    # Update the voice for this session in TTS service
+    tts = get_tts_service()
+    tts.set_voice(session_id, voice_name)
+    logger.info(f"Voice set to '{voice_name}' for session {session_id}")
     return {"message": f"Voice set to {voice_name}", "voice": voice_name}

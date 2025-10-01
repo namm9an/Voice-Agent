@@ -181,7 +181,7 @@ class VoiceStreamHandler:
             })
 
             # Step 5: Generate speech
-            audio_response = await self.tts_service.synthesize_speech(ai_response)
+            audio_response = await self.tts_service.synthesize_speech(ai_response, session_id=session_id)
             logger.info(f"[WS-{session_id}] TTS Generated: {len(audio_response)} bytes")
 
             # Send audio response to client (base64 encoded)
