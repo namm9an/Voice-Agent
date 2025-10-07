@@ -7,6 +7,8 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.api.routes.audio import router as audio_router
 from app.api.routes.health import router as health_router
+from app.api.routes.livekit import router as livekit_router
+from app.api.routes.monitoring import router as monitoring_router
 from app.api.websockets.voice_stream import get_voice_stream_handler
 from app.utils.logger import setup_logging
 from typing import Optional
@@ -14,6 +16,41 @@ import time
 
 setup_logging()
 app = FastAPI(title="Voice Agent Backend", version="0.1.0")
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    from app.services.health_monitor import get_health_monitor
+    from app.services.metrics_manager import get_metrics_manager
+    from app.config.settings import get_settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+    settings = get_settings()
+
+    # Initialize metrics manager
+    metrics_path = getattr(settings, 'metrics_save_path', './logs/metrics.jsonl')
+    get_metrics_manager(save_path=metrics_path)
+    logger.info("[STARTUP] Metrics manager initialized")
+
+    # Initialize and start health monitor
+    health_monitor = get_health_monitor()
+    await health_monitor.start()
+    logger.info("[STARTUP] Health monitor started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    from app.services.health_monitor import get_health_monitor
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Stop health monitor
+    health_monitor = get_health_monitor()
+    await health_monitor.stop()
+    logger.info("[SHUTDOWN] Health monitor stopped")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,9 +79,11 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
-# Include API routers (Phase 1 wiring only)
+# Include API routers
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(audio_router, prefix="/api/v1")
+app.include_router(livekit_router, prefix="/api/v1/livekit")
+app.include_router(monitoring_router)
 
 @app.websocket("/ws")
 async def websocket_endpoint(
