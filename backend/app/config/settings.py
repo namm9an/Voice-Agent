@@ -45,20 +45,68 @@ class Settings(BaseSettings):
         "female_casual": "Jenny's voice is casual and friendly, speaking naturally with a warm conversational tone."
     }
 
+    # LiveKit Configuration
+    livekit_api_key: str = "APIqKZYLpFzhbP4"
+    livekit_api_secret: str = "C6ueGcv1Uff6cRdveALMeo2Zaevn134mfIdMRi2TlefNB"
+    livekit_url: str = "ws://101.53.140.228:7880"
+
     # Server
     cors_origins: List[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
+    app_env: str = "development"
+    app_port: int = 8000
 
     # Audio constraints
     max_audio_size_mb: int = 10
     audio_sample_rate: int = 16000
+    audio_channels: int = 1
     audio_max_duration_seconds: int = 120
     audio_min_duration_seconds: float = 0.5
     audio_normalize: bool = True
-    whisper_language: str = "auto"
+    whisper_language: str = "en"
     tts_voice_model: str = "tts_models/en/ljspeech/tacotron2-DDC"
     enable_cache: bool = False
     log_file_path: str = "logs/app.log"
+
+    # ASR (Phase 2)
+    asr_buffer_window_ms: int = 500
+    asr_buffer_slide_ms: int = 250
+    whisper_model: str = "openai/whisper-large-v3-turbo"
+
+    # LLM (Phase 3)
+    llm_streaming: bool = True
+    llm_max_tokens: int = 256
+    llm_temperature: float = 0.8
+
+    # TTS (Phase 4)
+    tts_chunk_size_sentences: int = 2
+    tts_sample_rate: int = 16000
+    tts_format: str = "wav"
+
+    # Pipeline & Session (Phase 5)
+    session_expiry_minutes: int = 10
+    max_concurrent_sessions: int = 5
+    memory_context_tokens: int = 512
+
+    # Diagnostics
+    enable_stream_logging: bool = True
+    log_frames_every: int = 50
+    test_tone_enabled: bool = False
+
+    # LiveKit defaults
+    livekit_default_room: str = "voice-room"
+    livekit_agent_name: str = "voice_agent"
+
+    # Phase 7: Monitoring & Optimization
+    enable_metrics: bool = True
+    metrics_save_path: str = "./logs/metrics.jsonl"
+    health_check_interval: int = 30
+    service_timeout: int = 3
+    monitor_port: int = 8500
+
+    # Backup nodes (optional)
+    a100_node_backup: Optional[str] = None
+    l40_node_backup: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
