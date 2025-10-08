@@ -75,11 +75,9 @@ async def create_livekit_token(
         )
 
         # Start agent in the room (background task)
-        # TEMPORARILY DISABLED - WebRTC connection timeout from backend
-        # worker = get_livekit_worker()
-        # background_tasks.add_task(worker.join_room, room_name)
-        # logger.info(f"Scheduled agent to join room: {room_name}")
-        logger.warning(f"Agent auto-join disabled for room: {room_name} (WebRTC timeout issue)")
+        worker = get_livekit_worker()
+        background_tasks.add_task(worker.join_room, room_name)
+        logger.info(f"Scheduled agent to join room: {room_name}")
 
         return TokenResponse(
             token=jwt_token,
