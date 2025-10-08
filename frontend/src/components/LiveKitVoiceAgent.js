@@ -9,7 +9,7 @@ import {
 import { Track, ConnectionState } from 'livekit-client';
 import '@livekit/components-styles';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function VoiceAgent() {
   const [token, setToken] = useState('');
