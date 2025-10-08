@@ -34,10 +34,13 @@ async def startup_event():
     get_metrics_manager(save_path=metrics_path)
     logger.info("[STARTUP] Metrics manager initialized")
 
-    # Initialize and start health monitor
-    health_monitor = get_health_monitor()
-    await health_monitor.start()
-    logger.info("[STARTUP] Health monitor started")
+    # Initialize and start health monitor (only if enabled)
+    if settings.enable_metrics:
+        health_monitor = get_health_monitor()
+        await health_monitor.start()
+        logger.info("[STARTUP] Health monitor started")
+    else:
+        logger.info("[STARTUP] Health monitoring disabled")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -47,14 +50,16 @@ async def shutdown_event():
 
     logger = logging.getLogger(__name__)
 
-    # Stop health monitor
-    health_monitor = get_health_monitor()
-    await health_monitor.stop()
-    logger.info("[SHUTDOWN] Health monitor stopped")
+    # Stop health monitor (only if enabled)
+    settings = get_settings()
+    if settings.enable_metrics:
+        health_monitor = get_health_monitor()
+        await health_monitor.stop()
+        logger.info("[SHUTDOWN] Health monitor stopped")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000","http://101.53.140.228:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
