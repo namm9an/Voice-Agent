@@ -46,6 +46,7 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     from app.services.health_monitor import get_health_monitor
+    from app.config.settings import get_settings
     import logging
 
     logger = logging.getLogger(__name__)
